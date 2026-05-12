@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useState,
+  useEffect,
+} from "react";
 import { supabase } from "./lib/supabase";
 export default function Home() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] =
+  useState("All");
   const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [user, setUser] = useState<any>(null);
@@ -34,10 +39,73 @@ const [siteVisits, setSiteVisits] =
   useState<any[]>([]);
   const [closedDeals, setClosedDeals] =
   useState(0);
-  const [statusFilter, setStatusFilter] =
-  useState("All");
   const [menuOpen, setMenuOpen] =
   useState(false);
+  const [darkMode, setDarkMode] =
+  useState(false);
+  useEffect(() => {
+
+  const savedTheme =
+    localStorage.getItem("darkMode");
+
+  if (savedTheme === "true") {
+    setDarkMode(true);
+  }
+
+}, []);
+useEffect(() => {
+
+  const getSession = async () => {
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    setUser(session?.user || null);
+
+    setLoading(false);
+  };
+
+  getSession();
+
+  const {
+    data: authListener,
+  } = supabase.auth.onAuthStateChange(
+    (_event, session) => {
+
+      setUser(session?.user || null);
+
+      setLoading(false);
+    }
+  );
+
+  return () => {
+    authListener.subscription.unsubscribe();
+  };
+
+}, []);
+useEffect(() => {
+
+  localStorage.setItem(
+    "darkMode",
+    darkMode.toString()
+  );
+
+}, [darkMode]);
+useEffect(() => {
+
+  if (user) {
+    fetchLeads();
+  }
+
+}, [user]);
+
+  const [notes, setNotes] =
+  useState("");
+  const [followup, setFollowup] =
+  useState("");
+  const [editingId, setEditingId] =
+  useState<number | null>(null);
 
   const [leads, setLeads] = useState<any[]>([]);
   useEffect(() => {
@@ -129,6 +197,8 @@ const logout = async () => {
 
   setUser(null);
 };
+const [loading, setLoading] =
+  useState(true);
 const fetchProperties = async () => {
 
   const { data, error } = await supabase
@@ -159,11 +229,73 @@ const fetchSiteVisits = async () => {
 
   setSiteVisits(data);
 };
+const editLead = (lead: any) => {
+
+  setEditingId(lead.id);
+
+  setName(lead.name);
+
+  setPhone(lead.phone);
+
+  setNotes(lead.notes || "");
+
+  setFollowup(lead.followup || "");
+
+};
+useEffect(() => {
+
+  const getSession = async () => {
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    setUser(session?.user || null);
+
+    setLoading(false);
+  };
+
+  getSession();
+
+  const {
+    data: authListener,
+  } = supabase.auth.onAuthStateChange(
+    (_event, session) => {
+
+      setUser(session?.user || null);
+
+      setLoading(false);
+    }
+  );
+
+  return () => {
+    authListener.subscription.unsubscribe();
+  };
+
+}, []);
 const addLead = async () => {
 
   if (!name || !phone) return;
 
-  const { data, error } = await supabase
+  let error;
+
+if (editingId) {
+
+  const response = await supabase
+    .from("leads")
+    .update({
+      name,
+      phone,
+      notes,
+      followup,
+    })
+    .eq("id", editingId);
+
+  error = response.error;
+
+} else {
+
+  const response = await supabase
     .from("leads")
     .insert([
       {
@@ -171,9 +303,14 @@ const addLead = async () => {
         phone,
         property: "New Property",
         status: "New",
+        notes,
+        followup,
         user_id: user.id,
       },
     ]);
+
+  error = response.error;
+}
 
   if (error) {
     console.log(error);
@@ -188,8 +325,12 @@ const addLead = async () => {
   };
 
   fetchLeads();
-  setName("");
-  setPhone("");
+
+setName("");
+setPhone("");
+setNotes("");
+setFollowup("");
+setEditingId(null);
 };
 
   
@@ -287,15 +428,36 @@ const deleteLead = async (id: number) => {
     .eq("id", id);
 
   if (error) {
+    alert(error.message);
     console.log(error);
     return;
   }
 
-  fetchLeads();
+  setLeads((prev) =>
+    prev.filter((lead) => lead.id !== id)
+  );
 };
 
 const filteredLeads = leads.filter((lead) => {
 
+  const totalLeads = leads.length;
+
+const closedDeals = leads.filter(
+  (lead) => lead.status === "Closed"
+).length;
+
+const siteVisits = leads.filter(
+  (lead) => lead.status === "Site Visit"
+).length;
+  const today = new Date()
+  .toISOString()
+  .split("T")[0];
+  const importantFollowups =
+  leads.filter(
+    (lead) =>
+      lead.followup &&
+      lead.followup.trim() !== ""
+  );
   const matchesSearch =
     lead.name
       .toLowerCase()
@@ -307,6 +469,64 @@ const filteredLeads = leads.filter((lead) => {
 
   return matchesSearch && matchesStatus;
 });
+const today = new Date()
+  .toISOString()
+  .split("T")[0];
+const importantFollowups =
+  leads.filter(
+    (lead) =>
+      lead.followup &&
+      lead.followup.trim() !== ""
+  );
+
+const exportLeads = () => {
+
+  const headers = [
+    "Name",
+    "Phone",
+    "Property",
+    "Status",
+  ];
+
+  const rows = leads.map((lead) => [
+    lead.name,
+    lead.phone,
+    lead.property,
+    lead.status,
+  ]);
+
+  const csvContent =
+    [
+      headers.join(","),
+      ...rows.map((row) => row.join(",")),
+    ].join("\n");
+
+  const blob = new Blob(
+    [csvContent],
+    { type: "text/csv;charset=utf-8;" }
+  );
+
+  const link =
+    document.createElement("a");
+
+  const url =
+    URL.createObjectURL(blob);
+
+  link.setAttribute("href", url);
+
+  link.setAttribute(
+    "download",
+    "leads.csv"
+  );
+
+  link.style.visibility = "hidden";
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  document.body.removeChild(link);
+};
 return (
   <>
   {!user ? (
@@ -326,7 +546,7 @@ return (
           onChange={(e) =>
             setEmail(e.target.value)
           }
-          className="w-full border p-3 rounded-lg mb-4"
+          className="w-full border p-3 rounded-2xl mb-4"
         />
 
         <input
@@ -336,19 +556,19 @@ return (
           onChange={(e) =>
             setPassword(e.target.value)
           }
-          className="w-full border p-3 rounded-lg mb-6"
+          className="w-full border p-3 rounded-2xl mb-6"
         />
 
         <button
           onClick={login}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg mb-3"
+          className="w-full bg-blue-600 text-white py-3 rounded-2xl mb-3"
         >
           Login
         </button>
 
         <button
           onClick={signup}
-          className="w-full bg-green-600 text-white py-3 rounded-lg"
+          className="w-full bg-green-600 text-white py-3 rounded-2xl"
         >
           Create Account
         </button>
@@ -358,8 +578,20 @@ return (
     </div>
 
   ) : (
-    <main className="min-h-screen bg-gray-100 flex">
+    <main
+  className={`min-h-screen flex ${
+    darkMode
+      ? "bg-gray-900 text-white"
+      : "bg-gray-100 text-black"
+  }`}
+>
 
+      {menuOpen && (
+  <div
+    onClick={() => setMenuOpen(false)}
+    className="fixed inset-0 bg-black/40 z-40 md:hidden"
+  />
+)}
       {/* Sidebar */}
       <aside
   className={`fixed md:static z-50 top-0 left-0 h-full w-64 bg-white shadow-lg p-6 transform transition-transform duration-300 ${
@@ -377,27 +609,27 @@ return (
 
           <div
   onClick={() => setMenuOpen(false)}
-  className="p-3 rounded-lg bg-blue-100 text-blue-700 font-semibold"
+  className="p-3 rounded-2xl bg-blue-100 text-blue-700 font-semibold"
 >
   Dashboard
 </div>
 
           <div
   onClick={() => setMenuOpen(false)}
-  className="p-3 rounded-lg hover:bg-gray-100 cursor-pointer"
+  className="p-3 rounded-2xl hover:bg-gray-100 cursor-pointer"
 >
   Leads
 </div>
 
-          <div className="p-3 rounded-lg hover:bg-gray-100 cursor-pointer">
+          <div className="p-3 rounded-2xl hover:bg-gray-100 cursor-pointer">
             Properties
           </div>
 
-          <div className="p-3 rounded-lg hover:bg-gray-100 cursor-pointer">
+          <div className="p-3 rounded-2xl hover:bg-gray-100 cursor-pointer">
             Customers
           </div>
 
-          <div className="p-3 rounded-lg hover:bg-gray-100 cursor-pointer">
+          <div className="p-3 rounded-2xl hover:bg-gray-100 cursor-pointer">
             Site Visits
           </div>
 
@@ -406,16 +638,16 @@ return (
       </aside>
 
       {/* Main Content */}
-      <section className="flex-1 p-8">
+      <section className="flex-1 px-4 md:px-8 py-6">
 
         {/* Top Bar */}
-        <div className="md:hidden mb-6">
+        <div className="md:hidden mb-6 sticky top-0 z-30 backdrop-blur-md bg-white/80 p-4 rounded-2xl shadow-lg">
 
   <button
     onClick={() =>
       setMenuOpen(!menuOpen)
     }
-    className="bg-blue-600 text-white px-4 py-2 rounded-lg"
+   className="bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-lg text-lg font-semibold"
   >
     ☰ Menu
   </button>
@@ -428,13 +660,13 @@ return (
 
           <div className="flex gap-3">
 
-  <button className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">
+  <button className="bg-blue-600 text-white px-5 py-2 rounded-2xl hover:bg-blue-700">
     Add Lead
   </button>
 
   <button
     onClick={logout}
-    className="bg-red-500 text-white px-5 py-2 rounded-lg hover:bg-red-600"
+    className="bg-red-500 text-white px-5 py-2 rounded-2xl hover:bg-red-600"
   >
     Logout
   </button>
@@ -446,7 +678,7 @@ return (
         {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
 
-          <div className="bg-white p-6 rounded-2xl shadow-md">
+          <div className="bg-white rounded-3xl shadow-lg p-6">
 
             <h3 className="text-gray-500 text-lg">
               Total Leads
@@ -457,7 +689,7 @@ return (
             </p>
 
           </div>
-          <div className="bg-white p-6 rounded-2xl shadow-md">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
 
   <h3 className="text-gray-500 text-lg">
     Properties
@@ -469,7 +701,7 @@ return (
 
 </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-md">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
 
             <h3 className="text-gray-500 text-lg">
               Site Visits
@@ -481,7 +713,7 @@ return (
 
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-md">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
 
             <h3 className="text-gray-500 text-lg">
               Closed Deals
@@ -495,8 +727,60 @@ return (
 
         </div>
 
+        {/* Follow-Up Dashboard */}
+
+<div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 mb-10">
+
+  <h3 className="text-2xl font-bold mb-6 text-yellow-800">
+    Follow-Up Reminders
+  </h3>
+
+  <div className="space-y-4">
+
+    {importantFollowups.length === 0 ? (
+
+      <p className="text-gray-500">
+        No follow-ups yet
+      </p>
+
+    ) : (
+
+      importantFollowups.map((lead, index) => (
+
+        <div
+          key={index}
+          className={`rounded-xl p-4 shadow-sm ${
+  lead.followup < today
+    ? "bg-red-100 border border-red-300"
+    : lead.followup === today
+    ? "bg-yellow-100 border border-yellow-300"
+    : "bg-white"
+}`}
+        >
+
+          <h4 className="font-bold text-lg">
+            {lead.name}
+          </h4>
+
+          <p className="text-gray-600">
+            📞 {lead.phone}
+          </p>
+
+          <p className="text-yellow-700 mt-2">
+            ⏰ {lead.followup}
+          </p>
+
+        </div>
+
+      ))
+
+    )}
+
+  </div>
+
+</div>
         {/* Add Lead Form */}
-        <div className="bg-white rounded-2xl shadow-md p-6 mb-10 mt-10">
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-10 mt-10">
 
           <h3 className="text-2xl font-bold mb-6 text-gray-800">
             Add New Lead
@@ -511,7 +795,7 @@ return (
   placeholder="Customer Name"
   value={name}
   onChange={(e) => setName(e.target.value)}
-  className="border p-3 rounded-lg"
+  className="border p-3 rounded-2xl"
 />
 
             <input
@@ -521,14 +805,31 @@ return (
   placeholder="Phone Number"
   value={phone}
   onChange={(e) => setPhone(e.target.value)}
-  className="border p-3 rounded-lg"
+  className="border p-3 rounded-2xl"
+/>
+<textarea
+  placeholder="Lead Notes"
+  value={notes}
+  onChange={(e) =>
+    setNotes(e.target.value)
+  }
+  className="border p-3 rounded-2xl md:col-span-2"
+/>
+<input
+  type="date"
+  placeholder="Follow-up Reminder"
+  value={followup}
+  onChange={(e) =>
+    setFollowup(e.target.value)
+  }
+  className="border p-3 rounded-2xl md:col-span-2"
 />
 
           </div>
 
           <button
   onClick={addLead}
-  className="mt-6 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+  className="mt-6 bg-blue-600 text-white px-6 py-3 rounded-2xl hover:bg-blue-700"
 >
   Save Lead
 </button>
@@ -548,7 +849,7 @@ return (
 </div>
         {/* Property Form */}
 
-<div className="bg-white rounded-2xl shadow-md p-6 mt-10">
+<div className="bg-white rounded-2xl shadow-lg p-6 mt-10">
 
   <h3 className="text-2xl font-bold mb-6 text-gray-800">
     Add Property
@@ -563,7 +864,7 @@ return (
       onChange={(e) =>
         setPropertyTitle(e.target.value)
       }
-      className="border p-3 rounded-lg"
+      className="border p-3 rounded-2xl"
     />
 
     <input
@@ -573,7 +874,7 @@ return (
       onChange={(e) =>
         setPropertyPrice(e.target.value)
       }
-      className="border p-3 rounded-lg"
+      className="border p-3 rounded-2xl"
     />
 
     <input
@@ -583,14 +884,14 @@ return (
       onChange={(e) =>
         setPropertyLocation(e.target.value)
       }
-      className="border p-3 rounded-lg"
+      className="border p-3 rounded-2xl"
     />
 
   </div>
 
   <button
     onClick={addProperty}
-    className="mt-6 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
+    className="mt-6 bg-green-600 text-white px-6 py-3 rounded-2xl hover:bg-green-700"
   >
     Save Property
   </button>
@@ -610,7 +911,7 @@ return (
 
       <div
         key={index}
-        className="bg-white rounded-2xl shadow-md p-6"
+        className="bg-white rounded-2xl shadow-lg p-6"
       >
 
         <h4 className="text-xl font-bold mb-3">
@@ -638,7 +939,7 @@ return (
 </div>
         {/* Site Visit Scheduler */}
 
-<div className="bg-white rounded-2xl shadow-md p-6 mt-10">
+<div className="bg-white rounded-2xl shadow-lg p-6 mt-10">
 
   <h3 className="text-2xl font-bold mb-6 text-gray-800">
     Schedule Site Visit
@@ -653,7 +954,7 @@ return (
       onChange={(e) =>
         setVisitLead(e.target.value)
       }
-      className="border p-3 rounded-lg"
+      className="border p-3 rounded-2xl"
     />
 
     <input
@@ -663,7 +964,7 @@ return (
       onChange={(e) =>
         setVisitProperty(e.target.value)
       }
-      className="border p-3 rounded-lg"
+      className="border p-3 rounded-2xl"
     />
 
     <input
@@ -672,14 +973,14 @@ return (
       onChange={(e) =>
         setVisitDate(e.target.value)
       }
-      className="border p-3 rounded-lg"
+      className="border p-3 rounded-2xl"
     />
 
   </div>
 
   <button
     onClick={addSiteVisit}
-    className="mt-6 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
+    className="mt-6 bg-purple-600 text-white px-6 py-3 rounded-2xl hover:bg-purple-700"
   >
     Schedule Visit
   </button>
@@ -699,7 +1000,7 @@ return (
 
       <div
         key={index}
-        className="bg-white rounded-2xl shadow-md p-6"
+        className="bg-white rounded-2xl shadow-lg p-6"
       >
 
         <h4 className="text-xl font-bold mb-3">
@@ -734,7 +1035,7 @@ return (
     onChange={(e) =>
       setSearch(e.target.value)
     }
-    className="border p-3 rounded-lg flex-1"
+    className="border p-3 rounded-2xl flex-1"
   />
 
   <select
@@ -742,7 +1043,7 @@ return (
     onChange={(e) =>
       setStatusFilter(e.target.value)
     }
-    className="border p-3 rounded-lg"
+    className="border p-3 rounded-2xl"
   >
 
     <option value="All">
@@ -773,7 +1074,7 @@ return (
 
 </div>
         {/* Leads Table */}
-        <div className="bg-white mt-10 rounded-2xl shadow-md p-6">
+        <div className="bg-white mt-10 rounded-2xl shadow-lg p-6">
 
           <div className="flex justify-between items-center mb-6">
 
@@ -781,15 +1082,26 @@ return (
               Recent Leads
             </h3>
 
-            <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-              Export
-            </button>
+            <button
+  onClick={exportLeads}
+  className="bg-green-600 text-white px-5 py-3 rounded-2xl hover:bg-green-700"
+>
+  Export
+</button>
+<button
+  onClick={() =>
+    setDarkMode(!darkMode)
+  }
+  className="bg-gray-800 text-white px-5 py-3 rounded-2xl"
+>
+  {darkMode ? "☀️ Light" : "🌙 Dark"}
+</button>
 
           </div>
 
-          <div className="overflow-x-auto rounded-xl">
+          <div className="overflow-x-auto rounded-3xl">
 
-            <table className="w-full border-collapse">
+            <table className="min-w-[900px] w-full border-collapse">
 
               <thead>
                 <tr className="bg-gray-100 text-left">
@@ -798,7 +1110,11 @@ return (
                   <th className="p-4">Phone</th>
                   <th className="p-4">Property</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Action</th>
+<th className="p-4">Notes</th>
+<th className="p-4">Action</th>
+
+
+
 
                 </tr>
               </thead>
@@ -807,7 +1123,7 @@ return (
 
   {filteredLeads.map((lead, index) => (
 
-    <tr key={index} className="border-b">
+    <tr key={lead.id} className="border-b">
 
       <td className="p-4">
         {lead.name}
@@ -821,9 +1137,10 @@ return (
         {lead.property}
       </td>
 
-      <td className="p-4">
+      
 
-        <select
+       <td className="p-4">
+       <select
           value={lead.status}
           onChange={(e) =>
             updateStatus(
@@ -831,7 +1148,7 @@ return (
               e.target.value
             )
           }
-          className="border rounded-lg px-3 py-2"
+          className="border rounded-2xl px-3 py-2"
         >
 
           <option value="New">New</option>
@@ -853,14 +1170,28 @@ return (
           </option>
 
         </select>
+        
 
       </td>
+      <td className="p-4 max-w-xs">
+
+  <p className="truncate">
+    {lead.notes || "No Notes"}
+  </p>
+
+</td>
 
       <td className="p-4">
 
         <button
+  onClick={() => editLead(lead)}
+  className="bg-blue-500 text-white px-5 py-3 rounded-2xl hover:bg-blue-600 mr-2"
+>
+  Edit
+</button>
+        <button
           onClick={() => deleteLead(lead.id)}
-          className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
+          className="bg-red-500 text-white px-5 py-3 rounded-2xl hover:bg-red-600"
         >
           Delete
         </button>
