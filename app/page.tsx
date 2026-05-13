@@ -156,19 +156,22 @@ const fetchLeads = async () => {
 
 const login = async () => {
 
-  const { error } =
+  const { data, error } =
     await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+  console.log("LOGIN DATA:", data);
+  console.log("LOGIN ERROR:", error);
 
   if (error) {
     alert(error.message);
     return;
   }
 
-  checkUser();
-};  
+  alert("Login Successful");
+};
 const signup = async () => {
 
   console.log("Signup started");
