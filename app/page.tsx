@@ -122,7 +122,29 @@ useEffect(() => {
   useState<number | null>(null);
 
   const [leads, setLeads] = useState<any[]>([]);
-  useEffect(() => {
+  const today = new Date()
+  .toISOString()
+  .split("T")[0];
+  const overdueLeads =
+  leads.filter(
+    (lead) =>
+      lead.followup &&
+      lead.followup < today
+  ).length;
+
+const todayLeads =
+  leads.filter(
+    (lead) =>
+      lead.followup === today
+  ).length;
+
+const upcomingLeads =
+  leads.filter(
+    (lead) =>
+      lead.followup &&
+      lead.followup > today
+  ).length;
+   useEffect(() => {
 
   checkUser();
 
@@ -486,9 +508,7 @@ const siteVisits = leads.filter(
 
   return matchesSearch && matchesStatus;
 });
-const today = new Date()
-  .toISOString()
-  .split("T")[0];
+
 const importantFollowups =
   leads.filter(
     (lead) =>
