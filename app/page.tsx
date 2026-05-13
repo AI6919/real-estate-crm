@@ -58,8 +58,22 @@ useEffect(() => {
   const getSession = async () => {
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+  data: { session },
+  error,
+} = await supabase.auth.getSession();
+
+if (error) {
+
+  console.log(error);
+
+  await supabase.auth.signOut();
+
+  setUser(null);
+
+  setLoading(false);
+
+  return;
+}
 
     setUser(session?.user || null);
 
@@ -1102,7 +1116,7 @@ return (
 
           </div>
 
-          <div className="overflow-x-auto rounded-3xl">
+          <div className="hidden md:block overflow-x-auto rounded-3xl">
 
             <table className="min-w-[900px] w-full border-collapse">
 
@@ -1209,7 +1223,80 @@ return (
 
             </table>
 
-          </div>
+<div className="md:hidden space-y-4 mt-4">
+
+  {filteredLeads.map((lead, index) => (
+
+    <div
+      key={index}
+      className="bg-white rounded-2xl shadow p-4 border"
+    >
+
+      <div className="flex justify-between items-start">
+
+        <div>
+          <h3 className="text-lg font-bold">
+            {lead.name}
+          </h3>
+
+          <p className="text-gray-500 text-sm">
+            {lead.phone}
+          </p>
+        </div>
+
+        <span className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+          {lead.status}
+        </span>
+
+      </div>
+
+      <div className="mt-4 space-y-2">
+
+        <p>
+          <span className="font-semibold">
+            Property:
+          </span>{" "}
+          {lead.property}
+        </p>
+
+        <p>
+          <span className="font-semibold">
+            Follow-up:
+          </span>{" "}
+          {lead.followup || "No Date"}
+        </p>
+
+        <p className="text-sm text-gray-600">
+          {lead.notes || "No Notes"}
+        </p>
+
+      </div>
+
+      <div className="flex gap-2 mt-4">
+
+        <button
+          onClick={() => editLead(lead)}
+          className="flex-1 bg-blue-500 text-white py-2 rounded-xl"
+        >
+          Edit
+        </button>
+
+        <button
+          onClick={() => deleteLead(lead.id)}
+          className="flex-1 bg-red-500 text-white py-2 rounded-xl"
+        >
+          Delete
+        </button>
+
+      </div>
+
+    </div>
+
+  ))}
+
+</div>
+
+</div>
 
         </div>
 
