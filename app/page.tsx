@@ -100,6 +100,18 @@ if (error) {
 }, []);
 useEffect(() => {
 
+  if (user) {
+
+    fetchLeads();
+
+    fetchProperties();
+
+    fetchSiteVisits();
+  }
+
+}, [user]);
+useEffect(() => {
+
   localStorage.setItem(
     "darkMode",
     darkMode.toString()
@@ -144,17 +156,7 @@ const upcomingLeads =
       lead.followup &&
       lead.followup > today
   ).length;
-   useEffect(() => {
-
-  checkUser();
-
-  fetchLeads();
-  
-  fetchProperties();
-
-  fetchSiteVisits();
-
-}, []);
+   
 useEffect(() => {
 
   const closed =
@@ -166,14 +168,7 @@ useEffect(() => {
 
 }, [leads]);
 
-const checkUser = async () => {
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  setUser(user);
-};
 const fetchLeads = async () => {
 
   const { data, error } = await supabase
@@ -281,37 +276,7 @@ const editLead = (lead: any) => {
   setFollowup(lead.followup || "");
 
 };
-useEffect(() => {
 
-  const getSession = async () => {
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    setUser(session?.user || null);
-
-    setLoading(false);
-  };
-
-  getSession();
-
-  const {
-    data: authListener,
-  } = supabase.auth.onAuthStateChange(
-    (_event, session) => {
-
-      setUser(session?.user || null);
-
-      setLoading(false);
-    }
-  );
-
-  return () => {
-    authListener.subscription.unsubscribe();
-  };
-
-}, []);
 const addLead = async () => {
 
   if (!name || !phone) return;
@@ -356,12 +321,7 @@ if (editingId) {
     return;
   }
 
-  const newLead = {
-    name,
-    phone,
-    property: "New Property",
-    status: "New",
-  };
+  
 
   fetchLeads();
 
@@ -442,23 +402,7 @@ const addSiteVisit = async () => {
   setVisitProperty("");
   setVisitDate("");
 };
-const updateLeadStatus = async (
-  id: number,
-  status: string
-) => {
 
-  const { error } = await supabase
-    .from("leads")
-    .update({ status })
-    .eq("id", id);
-
-  if (error) {
-    console.log(error);
-    return;
-  }
-
-  fetchLeads();
-};
 const deleteLead = async (id: number) => {
 
   const { error } = await supabase
@@ -477,37 +421,29 @@ const deleteLead = async (id: number) => {
   );
 };
 
-const filteredLeads = leads.filter((lead) => {
+const filteredLeads = leads.filter(
+  (lead) => {
 
-  const totalLeads = leads.length;
+    const matchesSearch =
+      lead.name
+        ?.toLowerCase()
+        .includes(
+          search.toLowerCase()
+        ) ||
+      lead.phone
+        ?.toString()
+        .includes(search);
 
-const closedDeals = leads.filter(
-  (lead) => lead.status === "Closed"
-).length;
+    const matchesStatus =
+      statusFilter === "All" ||
+      lead.status === statusFilter;
 
-const siteVisits = leads.filter(
-  (lead) => lead.status === "Site Visit"
-).length;
-  const today = new Date()
-  .toISOString()
-  .split("T")[0];
-  const importantFollowups =
-  leads.filter(
-    (lead) =>
-      lead.followup &&
-      lead.followup.trim() !== ""
-  );
-  const matchesSearch =
-    lead.name
-      .toLowerCase()
-      .includes(search.toLowerCase());
-
-  const matchesStatus =
-    statusFilter === "All" ||
-    lead.status === statusFilter;
-
-  return matchesSearch && matchesStatus;
-});
+    return (
+      matchesSearch &&
+      matchesStatus
+    );
+  }
+);
 
 const importantFollowups =
   leads.filter(
@@ -564,6 +500,27 @@ const exportLeads = () => {
 
   document.body.removeChild(link);
 };
+if (loading) {
+
+  return (
+
+    <div className="min-h-screen flex items-center justify-center">
+
+      <div className="text-center">
+
+        <h1 className="text-3xl font-bold">
+          Loading CRM...
+        </h1>
+
+        <p className="text-gray-500 mt-2">
+          Please wait
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
 return (
   <>
   {!user ? (
@@ -873,17 +830,7 @@ return (
 
         </div>
 
-        <div className="mb-6">
-
-  <input
-    type="text"
-    placeholder="Search by name or phone..."
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    className="w-full border p-3 rounded-xl"
-  />
-
-</div>
+        
         {/* Property Form */}
 
 <div className="bg-white rounded-2xl shadow-lg p-6 mt-10">
@@ -1243,6 +1190,8 @@ return (
 
             </table>
 
+</div>
+
 <div className="md:hidden space-y-4 mt-4">
 
   {filteredLeads.map((lead, index) => (
@@ -1312,13 +1261,13 @@ return (
 
     </div>
 
-  ))}
+        ))}
 
 </div>
 
 </div>
 
-        </div>
+        
 
       </section>
 
